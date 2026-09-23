@@ -62,18 +62,26 @@
   #card p { margin: 0; font-size: 12pt; font-weight: 400; line-height: 1.4; }
   #card p:empty { display: none; }
   #card .close { position: absolute; top: -2.4em; right: 0; padding: 0.4em 0.6em; border: 0; background: none; color: #ffffff; font: 400 16pt system-ui; cursor: pointer; }
-  #map { position: fixed; right: 12px; top: 12px; width: 240px; height: 160px; background: rgba(0,0,0,0.55); border-radius: 2.64px; z-index: 10; }
-  #map-svg { width: 100%; height: 100%; }
-  #map-svg text { font-family: 'Formular', system-ui, sans-serif; font-size: 9px; fill: #fff; }
-  #map-svg .node { fill: #fff; stroke: rgba(0,0,0,0.4); stroke-width: 1; }
-  #map-svg .node.current { fill: #ff9500; }
-  #map-svg line { stroke: rgba(255,255,255,0.5); stroke-width: 1.5; }
+  /* map/legend inset: caption strip on top, aerial below. 80% opacity at rest so it sits back
+     from the panorama, full opacity while the pointer is over it so zone highlights read clearly */
+  #map { position: fixed; right: 12px; top: 12px; width: 240px; z-index: 10; overflow: hidden; background: #000000; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 6px; opacity: 0.8; transition: opacity 0.2s; }
+  #map:hover { opacity: 1; }
+  #map-caption { padding: 6px 8px 5px; color: #ffffff; font: 700 8pt 'Formular', system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; }
+  #map-caption small { font-weight: 400; letter-spacing: 0.04em; text-transform: none; color: rgba(255, 255, 255, 0.65); margin-left: 6px; }
+  #map-view { position: relative; height: 160px; }
+  #map-svg { display: block; width: 100%; height: 100%; }
+  /* hot zones: invisible until hovered, then filled in the zone yellow from the Illustrator file */
+  #map-svg .zone { fill: #ffc200; fill-opacity: 0; cursor: pointer; transition: fill-opacity 0.15s; }
+  #map-svg .zone:hover { fill-opacity: 0.6; }
+  #map-svg .zone.current { fill: #ff9500; fill-opacity: 0.75; cursor: default; }
+  #map-label { position: absolute; left: 6px; bottom: 6px; padding: 2px 6px; background: #000000; border-radius: 2px; color: #ffffff; font: 700 8pt 'Formular', system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; pointer-events: none; opacity: 0; transition: opacity 0.15s; }
+  #map-label.show { opacity: 1; }
 </style>
 </head>
 <body>
 <div id="viewer"></div>
 <div id="banner">UNDER CONSTRUCTION</div>
-<div id="map"><svg id="map-svg" viewBox="0 0 240 160"></svg></div>
+<div id="map"><div id="map-caption">You Are Here<small id="map-here"></small></div><div id="map-view"><svg id="map-svg" viewBox="0 0 1200 800"></svg><div id="map-label"></div></div></div>
 <div id="card"><div class="box">
   <button class="close" aria-label="Close">✕</button>
   <div class="video"></div>
@@ -157,8 +165,11 @@ const livingMarkers = [
 const arrowSvg = '<svg viewBox="0 0 100 100" width="27" height="27"><circle cx="50" cy="50" r="44" fill="#ffffff"/><path d="M28 58 L50 36 L72 58" fill="none" stroke="#111111" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const arrowMarkers = [].map(m => ({ ...m, html: arrowSvg, size: { width: 27, height: 27 }, className: 'tour-arrow' }));
 
+// opening view, also where hovering the map's "you are here" zone re-centers to
+const START_VIEW = { yaw: '0deg', pitch: '0deg' };
 const viewer = new Viewer({
   container: 'viewer', panorama: 'photo.jpg', defaultZoomLvl: 30, navbar: false,
+  defaultYaw: START_VIEW.yaw, defaultPitch: START_VIEW.pitch,
   plugins: [[MarkersPlugin, { markers: [...livingMarkers, ...arrowMarkers] }]],
 });
 
@@ -190,54 +201,77 @@ viewer.getPlugin(MarkersPlugin).addEventListener('select-marker', ({ marker }) =
 card.addEventListener('click', e => { if (e.target === card || e.target.classList.contains('close')) closeCard(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCard(); });
 
-// Map/legend inset — WIREFRAME ONLY. There's only one real photo on this page, so "Tech Theater" is
-// the only real node; the other five are stand-ins for wherever arrow1–arrow5 will eventually lead,
-// just to test the look of the corner inset before there's a second location to actually navigate to.
-// Also prototyping here: a background graphic behind the dots (a plain rect stands in for it — there's
-// no real floor plan yet) and click-to-place hotspots on it, the same way every marker on the panorama
-// itself was placed — click, read the logged position out of the console, hand-place it.
-// Same design as the Swift app's exporter (RR_360_Tour_Swift/Export/HTMLBuilder.swift) — tune it here,
-// then carry any changes back there, including the eventual real graphic + hotspot data.
-const mapNodes = [
-  { id: 'interior', name: 'Interior', x: 120, y: 80, current: true },
+// Map/legend inset. Background is the aerial from the Illustrator artboard (360Tour_Map.svg,
+// 1200x800) flattened to map/aerial.webp with its clip/rotation/scale baked in; the hot zones
+// below are that file's shapes copied verbatim, so they share its 1200x800 coordinates. Zones
+// stay invisible until hovered, then fill and show their name; hovering a zone with an `arrow`
+// also turns the panorama to face that arrow (the way there) and pulses it. `target` is where a click will
+// navigate once there's a second panorama to go to — until then a click just logs the zone.
+// Same design as the Swift app's exporter (RR_360_Tour_Swift/Export/HTMLBuilder.swift) — carry
+// changes back there once settled.
+const mapZones = [
+  { id: 'alcove', name: 'Alcove', target: null, current: true,
+    shape: '<rect x="357.65" y="254.71" width="264.24" height="83.32"/>' },
+  { id: 'alcove-2', name: 'Tech Theater', target: null,
+    shape: '<path d="M756.42,309.68c-2.87.55-8.73,4.76-21.78,31.57-6.11,12.54-14.11,95.6-3.18,117.46.73,1.45-.79,10.25,7.47,23.29,6.39,10.08,9.74,23.6,22.55,24.37,20.97,1.26,33.93-29.13,34.1-33.66,1.17-31.69,2.19-82.38,1.27-114.46-.52-17.96-15.46-36.71-22.28-42.24-4.73-3.84-7.53-8.37-18.15-6.33Z"/>' },
+  { id: 'entrance', name: 'Entrance', target: null,
+    shape: '<rect x="758.24" y="332.32" width="295.12" height="153.13" transform="translate(1314.6806 -496.9137) rotate(90)"/>' },
+  { id: 'back-of-house', name: 'Back of House', target: null,
+    shape: '<rect x="365.36" y="482.34" width="264.24" height="83.32"/>' },
 ];
+// the zone with `current: true` is where this panorama was taken: it stays lit instead of only
+// on hover, and its name fills the caption ("You are here · Tech Theater")
+document.getElementById('map-here').textContent = mapZones.find(z => z.current)?.name ?? '';
+// aim a little above the arrow rather than dead-center on it, so it lands just below the
+// mid-screen UNDER CONSTRUCTION banner instead of behind it (can go to 0 once the banner does)
+const ARROW_VIEW_LIFT = 8;   // degrees
+
+// After Effects-style easy ease for the turn: 70% influence out of the start keyframe and 70% into
+// the end one, both at 0 speed — i.e. cubic-bezier(0.7, 0, 0.3, 1). Solves the bezier's x for t
+// (Newton's method, falling back to bisection), then returns its y.
+const cubicBezier = (x1, y1, x2, y2) => {
+  const bez = (t, a, b) => 3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3;
+  const dBez = (t, a, b) => 3 * a * (1 - t) ** 2 + 6 * (b - a) * t * (1 - t) + 3 * (1 - b) * t * t;
+  return x => {
+    if (x <= 0 || x >= 1) return x <= 0 ? 0 : 1;
+    let t = x;
+    for (let i = 0; i < 8; i++) {
+      const d = dBez(t, x1, x2);
+      if (Math.abs(d) < 1e-6) break;
+      t -= (bez(t, x1, x2) - x) / d;
+    }
+    if (!(t >= 0 && t <= 1) || Math.abs(bez(t, x1, x2) - x) > 1e-5) {
+      let lo = 0, hi = 1;
+      for (let i = 0; i < 40; i++) { t = (lo + hi) / 2; if (bez(t, x1, x2) < x) lo = t; else hi = t; }
+    }
+    return bez(t, y1, y2);
+  };
+};
+const EASE_70_70 = cubicBezier(0.7, 0, 0.3, 1);
 const mapSvg = document.getElementById('map-svg');
-
-// stand-in for a real floor-plan graphic, drawn first so the dots/lines paint on top of it
-const mapBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-mapBg.setAttribute('x', 0); mapBg.setAttribute('y', 0);
-mapBg.setAttribute('width', 240); mapBg.setAttribute('height', 160);
-mapBg.setAttribute('fill', '#222222');
-mapBg.setAttribute('stroke', 'rgba(255,255,255,0.3)');
-mapSvg.appendChild(mapBg);
-
-mapNodes.slice(1).forEach(n => {
-  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  line.setAttribute('x1', mapNodes[0].x); line.setAttribute('y1', mapNodes[0].y);
-  line.setAttribute('x2', n.x); line.setAttribute('y2', n.y);
-  mapSvg.appendChild(line);
-});
-mapNodes.forEach(n => {
-  const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-  dot.setAttribute('cx', n.x); dot.setAttribute('cy', n.y); dot.setAttribute('r', 6);
-  dot.setAttribute('class', 'node' + (n.current ? ' current' : ''));
-  mapSvg.appendChild(dot);
-  const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-  label.setAttribute('x', n.x + 9); label.setAttribute('y', n.y + 3);
-  label.textContent = n.name;
-  mapSvg.appendChild(label);
-});
-
-// click anywhere in the inset to log a normalized hotspot position — same idea as the
-// panorama's click-to-log-yaw/pitch above, shaped so it pastes straight into a node definition
-mapSvg.addEventListener('click', e => {
-  const pt = mapSvg.createSVGPoint();
-  pt.x = e.clientX; pt.y = e.clientY;
-  const svgPt = pt.matrixTransform(mapSvg.getScreenCTM().inverse());
-  const vb = mapSvg.viewBox.baseVal;
-  const x = (svgPt.x - vb.x) / vb.width;
-  const y = (svgPt.y - vb.y) / vb.height;
-  console.log(`{ x: '${x.toFixed(3)}', y: '${y.toFixed(3)}' }`);
+const mapLabel = document.getElementById('map-label');
+mapSvg.innerHTML = '<image href="map/aerial.webp" width="1200" height="800"/>' +
+  mapZones.map(z => `<g class="zone${z.current ? ' current' : ''}" data-zone="${z.id}">${z.shape}</g>`).join('');
+mapSvg.querySelectorAll('.zone').forEach(g => {
+  const zone = mapZones.find(z => z.id === g.dataset.zone);
+  const arrow = zone.arrow && arrowMarkers.find(a => a.id === zone.arrow);
+  const arrowEl = () => arrow && document.getElementById(`psv-marker-${arrow.id}`);
+  g.addEventListener('mouseenter', () => {
+    mapLabel.textContent = zone.name; mapLabel.classList.add('show');
+    // "you are here" zone re-centers on the opening view; any other zone turns the panorama to
+    // face the arrow that leads there, and pulses it
+    if (zone.current) {
+      viewer.animate({ ...START_VIEW, speed: 1000, easing: EASE_70_70 });
+    } else if (arrow) {
+      viewer.animate({ yaw: arrow.position.yaw, pitch: `${parseFloat(arrow.position.pitch) + ARROW_VIEW_LIFT}deg`, speed: 1000, easing: EASE_70_70 });
+      arrowEl()?.classList.add('tour-arrow--focus');
+    }
+  });
+  g.addEventListener('mouseleave', () => {
+    mapLabel.classList.remove('show');
+    arrowEl()?.classList.remove('tour-arrow--focus');
+  });
+  g.addEventListener('click', () => console.log(`map zone: ${zone.id}`, zone.target ?? '(no target yet)'));
 });
 
 // banner timeline, in frames
