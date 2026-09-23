@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>360 Tour</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@photo-sphere-viewer/core@5/index.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@photo-sphere-viewer/markers-plugin@5/index.css"><style>
+  html, body { margin: 0; height: 100%; background: #000; }
+  #viewer { width: 100%; height: 100%; }
+  #banner {
+    position: fixed; left: 0; right: 0; top: 50%; transform: translateY(-50%);
+    z-index: 5; pointer-events: none; overflow: hidden;
+    padding: 0.6em 0; text-align: center;
+    background: rgba(255, 212, 0, 0.3);
+    /* difference inverts against whatever's behind it, so the white text reads dark over the
+       bright windows/headliner instead of vanishing the way screen did */
+    mix-blend-mode: difference;
+    opacity: 0.8;
+    color: #ffffff;
+    font-family: 'Formular', system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 12pt;
+    letter-spacing: 0.2em;
+  }
+  .psv-tooltip, .psv-tooltip .psv-tooltip-content {
+    color: #ffffff;
+    font-family: 'Formular', system-ui, sans-serif;
+    font-weight: 400;
+    font-size: 12pt;
+    text-shadow: none;
+  }
+  .psv-tooltip .psv-tooltip-content { padding: 0.7em; }
+  /* header keeps the tooltip's existing look (Formular 400/12pt/white); body is
+     deliberately smaller and dimmer so the two read as a clear hierarchy, not two
+     lines of the same weight */
+  .psv-tooltip-content h1 { margin: 0 0 0.3em; font: 400 12pt 'Formular', system-ui, sans-serif; color: #ffffff; }
+  .psv-tooltip-content p { margin: 0; font: 400 10pt 'Formular', system-ui, sans-serif; color: rgba(255, 255, 255, 0.65); line-height: 1.35; }
+  /* video preview thumbnail bleeds to the tooltip's edges rather than sitting inset by the
+     content div's own padding (0.7em, matched here so the math cancels out exactly) */
+  .psv-tooltip-content img { display: block; width: calc(100% + 1.4em); margin: -0.7em -0.7em 0.4em; border-radius: 2px 2px 0 0; }
+  /* content-type label (e.g. "White Paper") above the thumbnail — sits in the normal padded
+     flow, so the image below it keeps its left/right/bottom bleed but not its top bleed,
+     or it would slide up underneath this label instead of sitting below it */
+  .psv-tooltip-content .tt-kind { display: block; margin: 0 0 0.35em; font: 700 8pt 'Formular', system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.55); }
+  /* arrows have no tooltip/click yet, so PSV's default marker cursor ("move") shows instead
+     of "pointer" — override it so they still read as clickable on hover */
+  .psv-marker.tour-arrow { cursor: pointer; }
+  .psv-tooltip-content .tt-kind + img { margin-top: 0; }
+  .psv-tooltip { background: #000000; border-radius: 2px; box-shadow: none; }
+  .psv-tooltip--top-left .psv-tooltip-arrow, .psv-tooltip--top-center .psv-tooltip-arrow, .psv-tooltip--top-right .psv-tooltip-arrow { border-top-color: #000000; }
+  .psv-tooltip--bottom-left .psv-tooltip-arrow, .psv-tooltip--bottom-center .psv-tooltip-arrow, .psv-tooltip--bottom-right .psv-tooltip-arrow { border-bottom-color: #000000; }
+  .psv-tooltip--left-top .psv-tooltip-arrow, .psv-tooltip--center-left .psv-tooltip-arrow, .psv-tooltip--left-bottom .psv-tooltip-arrow { border-left-color: #000000; }
+  .psv-tooltip--right-top .psv-tooltip-arrow, .psv-tooltip--center-right .psv-tooltip-arrow, .psv-tooltip--right-bottom .psv-tooltip-arrow { border-right-color: #000000; }
+  #card { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.6); }
+  #card.open { display: flex; }
+  #card .box { position: relative; width: min(92vw, 720px); background: #000000; border-radius: 2px; color: #ffffff; font-family: 'Formular', system-ui, sans-serif; }
+  #card .video { aspect-ratio: 16 / 9; width: 100%; }
+  #card iframe { display: block; width: 100%; height: 100%; border: 0; }
+  #card .text { padding: 0.75em 1em 1em; }
+  #card h2 { margin: 0 0 0.4em; font-size: 14pt; font-weight: 700; }
+  #card p { margin: 0; font-size: 12pt; font-weight: 400; line-height: 1.4; }
+  #card p:empty { display: none; }
+  #card .close { position: absolute; top: -2.4em; right: 0; padding: 0.4em 0.6em; border: 0; background: none; color: #ffffff; font: 400 16pt system-ui; cursor: pointer; }
+  #map { position: fixed; right: 12px; top: 12px; width: 240px; height: 160px; background: rgba(0,0,0,0.55); border-radius: 2.64px; z-index: 10; }
+  #map-svg { width: 100%; height: 100%; }
+  #map-svg text { font-family: 'Formular', system-ui, sans-serif; font-size: 9px; fill: #fff; }
+  #map-svg .node { fill: #fff; stroke: rgba(0,0,0,0.4); stroke-width: 1; }
+  #map-svg .node.current { fill: #ff9500; }
+  #map-svg line { stroke: rgba(255,255,255,0.5); stroke-width: 1.5; }
+</style>
+</head>
+<body>
+<div id="viewer"></div>
+<div id="banner">UNDER CONSTRUCTION</div>
+<div id="map"><svg id="map-svg" viewBox="0 0 240 160"></svg></div>
+<div id="card"><div class="box">
+  <button class="close" aria-label="Close">✕</button>
+  <div class="video"></div>
+  <div class="text"><h2></h2><p></p></div>
+</div></div>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169/build/three.module.js",
+  "@photo-sphere-viewer/core": "https://cdn.jsdelivr.net/npm/@photo-sphere-viewer/core@5/index.module.js",
+  "@photo-sphere-viewer/markers-plugin": "https://cdn.jsdelivr.net/npm/@photo-sphere-viewer/markers-plugin@5/index.module.js"
+} }
+</script>
+<script type="module">
+import { Viewer } from '@photo-sphere-viewer/core';
+import { MarkersPlugin } from '@photo-sphere-viewer/markers-plugin';
+
+// markers that open a video card instead of only a tooltip. thumbnail is fetched once via
+// Vimeo's oEmbed endpoint (vimeo.com/api/oembed.json?url=...) and hardcoded here, same as
+// every other hand-placed value on this page — no runtime API call needed to show it.
+const cards = {};
+
+// markers that open a link in a new window. `label` is just for the hover preview (used when
+// there's no `preview` block) — the marker still opens `url` on click, unchanged either way.
+// `preview` is a richer hover format (image + title + description), used when the destination
+// page happens to publish Open Graph tags — fetched once and hardcoded here, same idea as the
+// video thumbnails above, not a live fetch from the page itself.
+const links = {};
+
+// placeholder copy while we test the header/body layout — swap for real text per marker later
+const lorem = '<h1>Lorem Ipsum Sit Amet</h1><p>Lorem ipsum dolor sit amet consectetur adipiscing elit et quas ad distinctio deleniti temporibus ipsum aute tempore sit sint et aliquip autem mollitia.</p>';
+
+// Three tooltip formats: a video marker previews its thumbnail + title, a link marker
+// previews its label + destination domain, and everything else gets the plain header/body.
+// All three still keep their click behavior (opens the video card / the link) unchanged —
+// this only changes what shows on hover, before that click.
+function previewFor(id) {
+  if (cards[id]) {
+    const c = cards[id];
+    return `<img src="${c.thumbnail}" alt=""><h1>${c.title}</h1>${c.description ? `<p>${c.description}</p>` : ''}`;
+  }
+  if (links[id]) {
+    const l = links[id];
+    if (l.preview) {
+      const kind = l.preview.kind ? `<span class="tt-kind">${l.preview.kind}</span>` : '';
+      return `${kind}<img src="${l.preview.image}" alt=""><h1>${l.preview.title}</h1><p>${l.preview.description}</p>`;
+    }
+    const site = l.site || new URL(l.url).hostname.replace(/^www\./, '');
+    return `<h1>↗ ${l.label}</h1><p>${site}</p>`;
+  }
+  return lorem;
+}
+
+const livingMarkers = [
+  { id: 'spot1', position: { yaw: '322.0deg', pitch: '-18.0deg' }, image: 'icons/coins.webp' },
+  { id: 'spot2', position: { yaw: '2.2deg', pitch: '-11.5deg' }, image: 'icons/cube.webp' },
+  { id: 'spot3', position: { yaw: '14.8deg', pitch: '-21.5deg' }, image: 'icons/cylinder.webp' },
+  { id: 'spot4', position: { yaw: '38.0deg', pitch: '-16.8deg' }, image: 'icons/torus.webp' },
+  { id: 'spot5', position: { yaw: '33.2deg', pitch: '-31.1deg' }, image: 'icons/pentagon.webp' },
+  { id: 'spot6', position: { yaw: '45.2deg', pitch: '2.7deg' }, image: 'icons/triangle.webp' },
+  { id: 'spot7', position: { yaw: '86.2deg', pitch: '-27.2deg' }, image: 'icons/coins.webp' },
+  { id: 'spot8', position: { yaw: '89.1deg', pitch: '-47.4deg' }, image: 'icons/cube.webp' },
+  { id: 'spot9', position: { yaw: '99.0deg', pitch: '-44.9deg' }, image: 'icons/cylinder.webp' },
+  { id: 'spot10', position: { yaw: '152.6deg', pitch: '-0.6deg' }, image: 'icons/pentagon.webp' },
+  { id: 'spot11', position: { yaw: '162.3deg', pitch: '1.7deg' }, image: 'icons/torus.webp' },
+  { id: 'spot12', position: { yaw: '198.3deg', pitch: '1.5deg' }, image: 'icons/triangle.webp' },
+  { id: 'spot13', position: { yaw: '206.7deg', pitch: '-1.3deg' }, image: 'icons/coins.webp' },
+  { id: 'spot14', position: { yaw: '274.3deg', pitch: '-27.6deg' }, image: 'icons/cube.webp' },
+  { id: 'spot15', position: { yaw: '274.4deg', pitch: '-50.2deg' }, image: 'icons/cylinder.webp' },
+].map(m => ({ ...m, size: { width: 45, height: 48 }, tooltip: { content: previewFor(m.id), trigger: !cards[m.id] && !links[m.id] && matchMedia('(hover: none)').matches ? 'click' : 'hover' } }));
+
+// direction arrows, placed for now with no click action
+const arrowSvg = '<svg viewBox="0 0 100 100" width="27" height="27"><circle cx="50" cy="50" r="44" fill="#ffffff"/><path d="M28 58 L50 36 L72 58" fill="none" stroke="#111111" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const arrowMarkers = [].map(m => ({ ...m, html: arrowSvg, size: { width: 27, height: 27 }, className: 'tour-arrow' }));
+
+const viewer = new Viewer({
+  container: 'viewer', panorama: 'photo.jpg', defaultZoomLvl: 30, navbar: false,
+  plugins: [[MarkersPlugin, { markers: [...livingMarkers, ...arrowMarkers] }]],
+});
+
+viewer.addEventListener('click', ({ data }) => {
+  const d = r => (r * 180 / Math.PI).toFixed(1) + 'deg';
+  console.log(`{ yaw: '${d(data.yaw)}', pitch: '${d(data.pitch)}' }`);
+});
+
+const card = document.getElementById('card');
+const openCard = c => {
+  const frame = document.createElement('iframe');
+  frame.src = `https://player.vimeo.com/video/${c.vimeo}?title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479`;
+  frame.allow = 'autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media; web-share';
+  frame.referrerPolicy = 'strict-origin-when-cross-origin';
+  frame.title = c.title;
+  card.querySelector('.video').replaceChildren(frame);
+  card.querySelector('h2').textContent = c.title;
+  card.querySelector('p').textContent = c.description;
+  card.classList.add('open');
+};
+const closeCard = () => {
+  card.classList.remove('open');
+  card.querySelector('.video').replaceChildren();   // removing the iframe stops playback
+};
+viewer.getPlugin(MarkersPlugin).addEventListener('select-marker', ({ marker }) => {
+  if (cards[marker.id]) openCard(cards[marker.id]);
+  if (links[marker.id]) window.open(links[marker.id].url, '_blank', 'noopener,noreferrer');
+});
+card.addEventListener('click', e => { if (e.target === card || e.target.classList.contains('close')) closeCard(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCard(); });
+
+// Map/legend inset — WIREFRAME ONLY. There's only one real photo on this page, so "Tech Theater" is
+// the only real node; the other five are stand-ins for wherever arrow1–arrow5 will eventually lead,
+// just to test the look of the corner inset before there's a second location to actually navigate to.
+// Also prototyping here: a background graphic behind the dots (a plain rect stands in for it — there's
+// no real floor plan yet) and click-to-place hotspots on it, the same way every marker on the panorama
+// itself was placed — click, read the logged position out of the console, hand-place it.
+// Same design as the Swift app's exporter (RR_360_Tour_Swift/Export/HTMLBuilder.swift) — tune it here,
+// then carry any changes back there, including the eventual real graphic + hotspot data.
+const mapNodes = [
+  { id: 'interior', name: 'Interior', x: 120, y: 80, current: true },
+];
+const mapSvg = document.getElementById('map-svg');
+
+// stand-in for a real floor-plan graphic, drawn first so the dots/lines paint on top of it
+const mapBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+mapBg.setAttribute('x', 0); mapBg.setAttribute('y', 0);
+mapBg.setAttribute('width', 240); mapBg.setAttribute('height', 160);
+mapBg.setAttribute('fill', '#222222');
+mapBg.setAttribute('stroke', 'rgba(255,255,255,0.3)');
+mapSvg.appendChild(mapBg);
+
+mapNodes.slice(1).forEach(n => {
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line.setAttribute('x1', mapNodes[0].x); line.setAttribute('y1', mapNodes[0].y);
+  line.setAttribute('x2', n.x); line.setAttribute('y2', n.y);
+  mapSvg.appendChild(line);
+});
+mapNodes.forEach(n => {
+  const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  dot.setAttribute('cx', n.x); dot.setAttribute('cy', n.y); dot.setAttribute('r', 6);
+  dot.setAttribute('class', 'node' + (n.current ? ' current' : ''));
+  mapSvg.appendChild(dot);
+  const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  label.setAttribute('x', n.x + 9); label.setAttribute('y', n.y + 3);
+  label.textContent = n.name;
+  mapSvg.appendChild(label);
+});
+
+// click anywhere in the inset to log a normalized hotspot position — same idea as the
+// panorama's click-to-log-yaw/pitch above, shaped so it pastes straight into a node definition
+mapSvg.addEventListener('click', e => {
+  const pt = mapSvg.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const svgPt = pt.matrixTransform(mapSvg.getScreenCTM().inverse());
+  const vb = mapSvg.viewBox.baseVal;
+  const x = (svgPt.x - vb.x) / vb.width;
+  const y = (svgPt.y - vb.y) / vb.height;
+  console.log(`{ x: '${x.toFixed(3)}', y: '${y.toFixed(3)}' }`);
+});
+
+// banner timeline, in frames
+const FPS = 30, DROP = 9, STAGGER = 60, HOLD = 150, FADE = 30;
+const TOTAL = STAGGER + HOLD + FADE;
+const banner = document.getElementById('banner');
+const text = banner.textContent;
+banner.textContent = '';
+const spans = [...text].map(ch => {
+  const s = document.createElement('span');
+  s.textContent = ch === ' ' ? ' ' : ch;
+  s.style.display = 'inline-block';
+  banner.append(s);
+  return s;
+});
+const letters = spans.filter(s => s.textContent !== ' ');
+letters.forEach((s, i) => {
+  const start = Math.round(i * (STAGGER - DROP) / (letters.length - 1));
+  const at = frame => frame / TOTAL;
+  s.animate([
+    { opacity: 0, transform: 'translateY(-50px)', offset: 0 },
+    { opacity: 0, transform: 'translateY(-50px)', offset: at(start) },
+    { opacity: 1, transform: 'translateY(0)', offset: at(start + DROP) },
+    { opacity: 1, transform: 'translateY(0)', offset: at(STAGGER + HOLD) },
+    { opacity: 0, transform: 'translateY(0)', offset: 1 },
+  ], { duration: TOTAL / FPS * 1000, iterations: Infinity });
+});
+</script>
+</body>
+</html>
