@@ -177,7 +177,7 @@ const arrowSvg = '<svg viewBox="0 0 100 100" width="27" height="27"><circle cx="
 const arrowMarkers = [].map(m => ({ ...m, html: arrowSvg, size: { width: 27, height: 27 }, className: 'tour-arrow' }));
 
 // opening view
-const START_VIEW = { yaw: '0deg', pitch: '0deg' };
+const START_VIEW = { yaw: '0.9deg', pitch: '-27.9deg' };
 const viewer = new Viewer({
   container: 'viewer', panorama: 'photo-preview.webp', defaultZoomLvl: 30, navbar: false,
   defaultYaw: START_VIEW.yaw, defaultPitch: START_VIEW.pitch,
