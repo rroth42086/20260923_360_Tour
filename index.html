@@ -48,6 +48,12 @@
   .psv-marker.tour-arrow { cursor: pointer; }
   .psv-tooltip-content .tt-kind + img { margin-top: 0; }
   .psv-tooltip { background: #000000; border-radius: 2px; box-shadow: none; }
+  /* plain (text-only) tooltips: title always on one line — the box grows to fit it, never
+     narrower than PSV's 200px default — and the body wraps to that width instead of
+     widening the box itself (width 0 + min-width 100% keeps it out of the size calculation) */
+  .psv-tooltip:not(:has(.psv-tooltip-content > img)) { width: max-content; min-width: 200px; max-width: none; }
+  .psv-tooltip:not(:has(.psv-tooltip-content > img)) .psv-tooltip-content h1 { white-space: nowrap; }
+  .psv-tooltip:not(:has(.psv-tooltip-content > img)) .psv-tooltip-content p { width: 0; min-width: 100%; }
   .psv-tooltip--top-left .psv-tooltip-arrow, .psv-tooltip--top-center .psv-tooltip-arrow, .psv-tooltip--top-right .psv-tooltip-arrow { border-top-color: #000000; }
   .psv-tooltip--bottom-left .psv-tooltip-arrow, .psv-tooltip--bottom-center .psv-tooltip-arrow, .psv-tooltip--bottom-right .psv-tooltip-arrow { border-bottom-color: #000000; }
   .psv-tooltip--left-top .psv-tooltip-arrow, .psv-tooltip--center-left .psv-tooltip-arrow, .psv-tooltip--left-bottom .psv-tooltip-arrow { border-left-color: #000000; }
@@ -62,26 +68,31 @@
   #card p { margin: 0; font-size: 12pt; font-weight: 400; line-height: 1.4; }
   #card p:empty { display: none; }
   #card .close { position: absolute; top: -2.4em; right: 0; padding: 0.4em 0.6em; border: 0; background: none; color: #ffffff; font: 400 16pt system-ui; cursor: pointer; }
-  /* map/legend inset: caption strip on top, aerial below. 80% opacity at rest so it sits back
+  /* map/legend inset: portrait speaker diagram (2:3, its own "AUDIO LOCATION" title). 80% opacity at rest so it sits back
      from the panorama, full opacity while the pointer is over it so zone highlights read clearly */
-  #map { position: fixed; right: 12px; top: 12px; width: 240px; z-index: 10; overflow: hidden; background: #000000; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 6px; opacity: 0.8; transition: opacity 0.2s; }
+  #map { position: fixed; right: 12px; top: 12px; width: 180px; z-index: 10; overflow: hidden; background: #000000; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 6px; opacity: 0.8; transition: opacity 0.2s; }
   #map:hover { opacity: 1; }
-  #map-caption { padding: 6px 8px 5px; color: #ffffff; font: 700 8pt 'Formular', system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; }
-  #map-caption small { font-weight: 400; letter-spacing: 0.04em; text-transform: none; color: rgba(255, 255, 255, 0.65); margin-left: 6px; }
-  #map-view { position: relative; height: 160px; }
+  #map-view { position: relative; height: 270px; }
   #map-svg { display: block; width: 100%; height: 100%; }
   /* hot zones: invisible until hovered, then filled in the zone yellow from the Illustrator file */
   #map-svg .zone { fill: #ffc200; fill-opacity: 0; cursor: pointer; transition: fill-opacity 0.15s; }
+  /* the speaker pills are only ~5px thick at this size, so each gets an invisible 8-unit halo that
+     also counts as hovering it (16-unit stroke; the tightest pair, the pillar speakers, sit 17 apart) */
+  #map-svg .zone > * { stroke: transparent; stroke-width: 16; pointer-events: all; }
   #map-svg .zone:hover { fill-opacity: 0.6; }
-  #map-svg .zone.current { fill: #ff9500; fill-opacity: 0.75; cursor: default; }
-  #map-label { position: absolute; left: 6px; bottom: 6px; padding: 2px 6px; background: #000000; border-radius: 2px; color: #ffffff; font: 700 8pt 'Formular', system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; pointer-events: none; opacity: 0; transition: opacity 0.15s; }
-  #map-label.show { opacity: 1; }
+  /* speaker marker for the map zone currently hovered: pulses (CSS `scale`, which stacks on top of
+     PSV's own positioning transform instead of replacing it) so it's easy to spot once the view turns */
+  .psv-marker.marker--focus { animation: marker-pulse 0.9s ease-in-out infinite; }
+  @keyframes marker-pulse {
+    0%, 100% { scale: 1; filter: drop-shadow(0 0 0 rgba(255, 194, 0, 0)); }
+    50% { scale: 1.3; filter: drop-shadow(0 0 6px rgba(255, 194, 0, 0.95)); }
+  }
 </style>
 </head>
 <body>
 <div id="viewer"></div>
 <div id="banner">UNDER CONSTRUCTION</div>
-<div id="map"><div id="map-caption">You Are Here<small id="map-here"></small></div><div id="map-view"><svg id="map-svg" viewBox="0 0 1200 800"></svg><div id="map-label"></div></div></div>
+<div id="map"><div id="map-view"><svg id="map-svg" viewBox="0 0 800 1200"></svg></div></div>
 <div id="card"><div class="box">
   <button class="close" aria-label="Close">✕</button>
   <div class="video"></div>
@@ -112,10 +123,10 @@ const links = {};
 
 // marker names shown as the tooltip header — best guesses from where each one sits in the car
 const names = {
-  spot1: 'Driver Door', spot2: 'Center Touchscreen', spot3: 'Glovebox', spot4: 'Passenger Door',
-  spot5: 'Passenger Seat', spot6: 'Side Mirror', spot7: 'Rear Door Controls', spot8: 'Rear Footwell',
-  spot9: 'Driver Window', spot10: 'Right Rear Headrest', spot11: 'Rear Window', spot12: 'Left Rear Headrest',
-  spot13: 'Rear Seatbelt', spot14: 'Rear Door Panel', spot15: 'Rear Floor Mat', spot16: 'Center Console Controls',
+  spot1: 'Driver Door Speaker', spot2: 'Center Touchscreen Speaker', spot3: 'Glovebox Speaker', spot4: 'Passenger Door Speaker',
+  spot5: 'Passenger Seat Speaker', spot6: 'Side Mirror Speaker', spot7: 'Rear Door Controls Speaker', spot8: 'Rear Footwell Speaker',
+  spot9: 'Driver Window Speaker', spot10: 'Right Rear Headrest Speaker', spot11: 'Rear Window Speaker', spot12: 'Left Rear Headrest Speaker',
+  spot13: 'Rear Seatbelt Speaker', spot14: 'Rear Door Panel Speaker', spot15: 'Rear Floor Mat Speaker', spot16: 'Center Console Controls Speaker',
 };
 
 // placeholder body copy while we test the header/body layout — swap for real text per marker later
@@ -165,7 +176,7 @@ const livingMarkers = [
 const arrowSvg = '<svg viewBox="0 0 100 100" width="27" height="27"><circle cx="50" cy="50" r="44" fill="#ffffff"/><path d="M28 58 L50 36 L72 58" fill="none" stroke="#111111" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const arrowMarkers = [].map(m => ({ ...m, html: arrowSvg, size: { width: 27, height: 27 }, className: 'tour-arrow' }));
 
-// opening view, also where hovering the map's "you are here" zone re-centers to
+// opening view
 const START_VIEW = { yaw: '0deg', pitch: '0deg' };
 const viewer = new Viewer({
   container: 'viewer', panorama: 'photo.jpg', defaultZoomLvl: 30, navbar: false,
@@ -201,30 +212,43 @@ viewer.getPlugin(MarkersPlugin).addEventListener('select-marker', ({ marker }) =
 card.addEventListener('click', e => { if (e.target === card || e.target.classList.contains('close')) closeCard(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCard(); });
 
-// Map/legend inset. Background is the aerial from the Illustrator artboard (360Tour_Map.svg,
-// 1200x800) flattened to map/aerial.webp with its clip/rotation/scale baked in; the hot zones
-// below are that file's shapes copied verbatim, so they share its 1200x800 coordinates. Zones
-// stay invisible until hovered, then fill and show their name; hovering a zone with an `arrow`
-// also turns the panorama to face that arrow (the way there) and pulses it. `target` is where a click will
-// navigate once there's a second panorama to go to — until then a click just logs the zone.
-// Same design as the Swift app's exporter (RR_360_Tour_Swift/Export/HTMLBuilder.swift) — carry
-// changes back there once settled.
+// Map/legend inset: the "Audio Location" speaker diagram from the Illustrator artboard
+// (map_source/20260923_360Tour_Map.svg, 800x1200 portrait) flattened to map/interior.webp; the
+// 13 speaker zones below are that file's shapes copied verbatim, so they share its 800x1200
+// coordinates. Zones stay invisible until hovered, then fill yellow. Each zone's `marker` is the
+// speaker marker it belongs to (e.g. 'spot1') — still to be resolved; once set, hovering the zone
+// turns the panorama to that marker and pulses it, the way the 0921 tour's zones point at arrows.
 const mapZones = [
-  { id: 'alcove', name: 'Alcove', target: null, current: true,
-    shape: '<rect x="357.65" y="254.71" width="264.24" height="83.32"/>' },
-  { id: 'alcove-2', name: 'Tech Theater', target: null,
-    shape: '<path d="M756.42,309.68c-2.87.55-8.73,4.76-21.78,31.57-6.11,12.54-14.11,95.6-3.18,117.46.73,1.45-.79,10.25,7.47,23.29,6.39,10.08,9.74,23.6,22.55,24.37,20.97,1.26,33.93-29.13,34.1-33.66,1.17-31.69,2.19-82.38,1.27-114.46-.52-17.96-15.46-36.71-22.28-42.24-4.73-3.84-7.53-8.37-18.15-6.33Z"/>' },
-  { id: 'entrance', name: 'Entrance', target: null,
-    shape: '<rect x="758.24" y="332.32" width="295.12" height="153.13" transform="translate(1314.6806 -496.9137) rotate(90)"/>' },
-  { id: 'back-of-house', name: 'Back of House', target: null,
-    shape: '<rect x="365.36" y="482.34" width="264.24" height="83.32"/>' },
+  { id: 'layer-6', marker: null,   // dash center
+    shape: '<rect x="354.78" y="159.01" width="92.43" height="24" rx="12" ry="12"/>' },
+  { id: 'layer-15', marker: null,   // dash, driver corner
+    shape: '<rect x="90.73" y="167.35" width="92.43" height="24" rx="12" ry="12" transform="translate(-33.57 31.55) rotate(-11.72)"/>' },
+  { id: 'layer-16', marker: null,   // driver door, front
+    shape: '<rect x="33.4" y="304.25" width="92.43" height="24" rx="12" ry="12" transform="translate(-236.63 395.87) rotate(-90)"/>' },
+  { id: 'layer-17', marker: null,   // driver-side pillar, inner
+    shape: '<rect x="75.27" y="611.31" width="92.43" height="24" rx="12" ry="12" transform="translate(-501.83 744.8) rotate(-90)"/>' },
+  { id: 'layer-18', marker: null,   // driver-side pillar, outer
+    shape: '<rect x="33.88" y="611.31" width="92.43" height="24" rx="12" ry="12" transform="translate(-543.22 703.41) rotate(-90)"/>' },
+  { id: 'layer-14', marker: null,   // rear passenger door
+    shape: '<rect x="676.75" y="919.33" width="92.43" height="24" rx="12" ry="12" transform="translate(-208.3598 1654.2994) rotate(-90)"/>' },
+  { id: 'layer-11', marker: null,   // rear corner, driver side
+    shape: '<rect x="120.57" y="1109.42" width="92.43" height="24" rx="12" ry="12" transform="translate(92.3327 2252.7248) rotate(-167.7755)"/>' },
+  { id: 'layer-12', marker: null,   // rear driver door
+    shape: '<rect x="33.88" y="917.89" width="92.43" height="24" rx="12" ry="12" transform="translate(-849.7905 1009.9891) rotate(-90)"/>' },
+  { id: 'layer-13', marker: null,   // rear corner, passenger side
+    shape: '<rect x="590.07" y="1107.89" width="92.43" height="24" rx="12" ry="12" transform="translate(1507.5797 2068.5014) rotate(167.0365)"/>' },
+  { id: 'layer-7', marker: null,   // dash, passenger corner
+    shape: '<rect x="617.95" y="167.68" width="92.43" height="24" rx="12" ry="12" transform="translate(1267.4325 510.5486) rotate(-166.3958)"/>' },
+  { id: 'layer-8', marker: null,   // passenger door, front
+    shape: '<rect x="676.51" y="304.62" width="92.43" height="24" rx="12" ry="12" transform="translate(406.1098 1039.3498) rotate(-90)"/>' },
+  { id: 'layer-9', marker: null,   // passenger-side pillar, outer
+    shape: '<rect x="676.51" y="612.63" width="92.43" height="24" rx="12" ry="12" transform="translate(98.0951 1347.3647) rotate(-90)"/>' },
+  { id: 'layer-10', marker: null,   // passenger-side pillar, inner
+    shape: '<rect x="635.39" y="612.63" width="92.43" height="24" rx="12" ry="12" transform="translate(56.973 1306.2426) rotate(-90)"/>' },
 ];
-// the zone with `current: true` is where this panorama was taken: it stays lit instead of only
-// on hover, and its name fills the caption ("You are here · Tech Theater")
-document.getElementById('map-here').textContent = mapZones.find(z => z.current)?.name ?? '';
-// aim a little above the arrow rather than dead-center on it, so it lands just below the
+// aim a little above the marker rather than dead-center on it, so it lands just below the
 // mid-screen UNDER CONSTRUCTION banner instead of behind it (can go to 0 once the banner does)
-const ARROW_VIEW_LIFT = 8;   // degrees
+const MARKER_VIEW_LIFT = 8;   // degrees
 
 // After Effects-style easy ease for the turn: 70% influence out of the start keyframe and 70% into
 // the end one, both at 0 speed — i.e. cubic-bezier(0.7, 0, 0.3, 1). Solves the bezier's x for t
@@ -249,29 +273,18 @@ const cubicBezier = (x1, y1, x2, y2) => {
 };
 const EASE_70_70 = cubicBezier(0.7, 0, 0.3, 1);
 const mapSvg = document.getElementById('map-svg');
-const mapLabel = document.getElementById('map-label');
-mapSvg.innerHTML = '<image href="map/aerial.webp" width="1200" height="800"/>' +
-  mapZones.map(z => `<g class="zone${z.current ? ' current' : ''}" data-zone="${z.id}">${z.shape}</g>`).join('');
+mapSvg.innerHTML = '<image href="map/interior.webp" width="800" height="1200"/>' +
+  mapZones.map(z => `<g class="zone" data-zone="${z.id}">${z.shape}</g>`).join('');
 mapSvg.querySelectorAll('.zone').forEach(g => {
   const zone = mapZones.find(z => z.id === g.dataset.zone);
-  const arrow = zone.arrow && arrowMarkers.find(a => a.id === zone.arrow);
-  const arrowEl = () => arrow && document.getElementById(`psv-marker-${arrow.id}`);
+  const marker = zone.marker && livingMarkers.find(m => m.id === zone.marker);
+  const markerEl = () => marker && document.getElementById(`psv-marker-${marker.id}`);
   g.addEventListener('mouseenter', () => {
-    mapLabel.textContent = zone.name; mapLabel.classList.add('show');
-    // "you are here" zone re-centers on the opening view; any other zone turns the panorama to
-    // face the arrow that leads there, and pulses it
-    if (zone.current) {
-      viewer.animate({ ...START_VIEW, speed: 1000, easing: EASE_70_70 });
-    } else if (arrow) {
-      viewer.animate({ yaw: arrow.position.yaw, pitch: `${parseFloat(arrow.position.pitch) + ARROW_VIEW_LIFT}deg`, speed: 1000, easing: EASE_70_70 });
-      arrowEl()?.classList.add('tour-arrow--focus');
-    }
+    if (!marker) return;
+    viewer.animate({ yaw: marker.position.yaw, pitch: `${parseFloat(marker.position.pitch) + MARKER_VIEW_LIFT}deg`, speed: 1000, easing: EASE_70_70 });
+    markerEl()?.classList.add('marker--focus');
   });
-  g.addEventListener('mouseleave', () => {
-    mapLabel.classList.remove('show');
-    arrowEl()?.classList.remove('tour-arrow--focus');
-  });
-  g.addEventListener('click', () => console.log(`map zone: ${zone.id}`, zone.target ?? '(no target yet)'));
+  g.addEventListener('mouseleave', () => markerEl()?.classList.remove('marker--focus'));
 });
 
 // banner timeline, in frames
