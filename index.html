@@ -102,8 +102,16 @@ const cards = {};
 // video thumbnails above, not a live fetch from the page itself.
 const links = {};
 
-// placeholder copy while we test the header/body layout — swap for real text per marker later
-const lorem = '<h1>Lorem Ipsum Sit Amet</h1><p>Lorem ipsum dolor sit amet consectetur adipiscing elit et quas ad distinctio deleniti temporibus ipsum aute tempore sit sint et aliquip autem mollitia.</p>';
+// marker names shown as the tooltip header — best guesses from where each one sits in the car
+const names = {
+  spot1: 'Driver Door', spot2: 'Center Touchscreen', spot3: 'Glovebox', spot4: 'Passenger Door',
+  spot5: 'Passenger Seat', spot6: 'Side Mirror', spot7: 'Rear Door Controls', spot8: 'Rear Footwell',
+  spot9: 'Driver Window', spot10: 'Right Rear Headrest', spot11: 'Rear Window', spot12: 'Left Rear Headrest',
+  spot13: 'Rear Seatbelt', spot14: 'Rear Door Panel', spot15: 'Rear Floor Mat', spot16: 'Center Console Controls',
+};
+
+// placeholder body copy while we test the header/body layout — swap for real text per marker later
+const lorem = '<p>Lorem ipsum dolor sit amet consectetur adipiscing elit et quas ad distinctio deleniti temporibus ipsum aute tempore sit sint et aliquip autem mollitia.</p>';
 
 // Three tooltip formats: a video marker previews its thumbnail + title, a link marker
 // previews its label + destination domain, and everything else gets the plain header/body.
@@ -123,7 +131,7 @@ function previewFor(id) {
     const site = l.site || new URL(l.url).hostname.replace(/^www\./, '');
     return `<h1>↗ ${l.label}</h1><p>${site}</p>`;
   }
-  return lorem;
+  return `<h1>${names[id]}</h1>${lorem}`;
 }
 
 const livingMarkers = [
