@@ -142,6 +142,7 @@ const livingMarkers = [
   { id: 'spot13', position: { yaw: '206.7deg', pitch: '-1.3deg' }, image: 'icons/coins.webp' },
   { id: 'spot14', position: { yaw: '274.3deg', pitch: '-27.6deg' }, image: 'icons/cube.webp' },
   { id: 'spot15', position: { yaw: '274.4deg', pitch: '-50.2deg' }, image: 'icons/cylinder.webp' },
+  { id: 'spot16', position: { yaw: '350.5deg', pitch: '-22.2deg' }, image: 'icons/triangle.webp' },
 ].map(m => ({ ...m, size: { width: 45, height: 48 }, tooltip: { content: previewFor(m.id), trigger: !cards[m.id] && !links[m.id] && matchMedia('(hover: none)').matches ? 'click' : 'hover' } }));
 
 // direction arrows, placed for now with no click action
