@@ -179,10 +179,15 @@ const arrowMarkers = [].map(m => ({ ...m, html: arrowSvg, size: { width: 27, hei
 // opening view
 const START_VIEW = { yaw: '0deg', pitch: '0deg' };
 const viewer = new Viewer({
-  container: 'viewer', panorama: 'photo.jpg', defaultZoomLvl: 30, navbar: false,
+  container: 'viewer', panorama: 'photo-preview.webp', defaultZoomLvl: 30, navbar: false,
   defaultYaw: START_VIEW.yaw, defaultPitch: START_VIEW.pitch,
   plugins: [[MarkersPlugin, { markers: [...livingMarkers, ...arrowMarkers] }]],
 });
+
+// progressive load: a 2048px preview (~150 KB) shows almost immediately, then the full 6144px
+// panorama (~1.2 MB) swaps in underneath without a fade or loader once it arrives — markers and
+// the current view stay put across the swap
+viewer.addEventListener('ready', () => viewer.setPanorama('photo.webp', { transition: false, showLoader: false }), { once: true });
 
 viewer.addEventListener('click', ({ data }) => {
   const d = r => (r * 180 / Math.PI).toFixed(1) + 'deg';
