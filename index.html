@@ -73,6 +73,7 @@
      from the panorama, full opacity while the pointer is over it so zone highlights read clearly */
   #map { position: fixed; right: 12px; top: 12px; width: 180px; z-index: 10; overflow: hidden; background: #000000; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 6px; opacity: 0.8; transition: opacity 0.2s; }
   #map:hover { opacity: 1; }
+  #map-caption { padding: 6px 8px 5px; color: #ffffff; font: 700 8pt 'Formular', system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; }
   #map-view { position: relative; height: 270px; }
   #map-svg { display: block; width: 100%; height: 100%; }
   /* scene breadcrumb under the map: Prev on the left, Next on the right, each a small dim
@@ -103,7 +104,7 @@
 <body>
 <div id="viewer"></div>
 <div id="banner">UNDER CONSTRUCTION</div>
-<div id="map"><div id="map-view"><svg id="map-svg" viewBox="0 0 800 1200"></svg></div><nav id="map-nav" aria-label="Scenes"></nav></div>
+<div id="map"><div id="map-caption"></div><div id="map-view"><svg id="map-svg" viewBox="0 0 800 1200"></svg></div><nav id="map-nav" aria-label="Scenes"></nav></div>
 <div id="card"><div class="box">
   <button class="close" aria-label="Close">✕</button>
   <div class="video"></div>
@@ -320,6 +321,7 @@ const HERE = 1;
 const navLink = (cls, dir, scene) => scene
   ? `<a class="${cls}" href="${scene.url}"><span class="dir">${dir}</span><span class="name">${scene.name}</span></a>`
   : `<span class="${cls}" aria-disabled="true"><span class="dir">${dir}</span><span class="name">—</span></span>`;
+document.getElementById('map-caption').textContent = scenes[HERE].name;
 document.getElementById('map-nav').innerHTML =
   navLink('prev', '‹ Prev', scenes[HERE - 1]) + navLink('next', 'Next ›', scenes[HERE + 1]);
 
