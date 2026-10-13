@@ -75,6 +75,16 @@
   #map:hover { opacity: 1; }
   #map-view { position: relative; height: 270px; }
   #map-svg { display: block; width: 100%; height: 100%; }
+  /* scene breadcrumb under the map: Prev on the left, Next on the right, each a small dim
+     direction label over the scene name in the caption's type style; an end of the tour shows
+     a dimmed dash instead of a link */
+  #map-nav { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px 7px; border-top: 1px solid rgba(255, 255, 255, 0.2); font: 700 8pt 'Formular', system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; }
+  #map-nav > * { display: flex; flex-direction: column; gap: 2px; min-width: 0; color: #ffffff; text-decoration: none; }
+  #map-nav .next { align-items: flex-end; text-align: right; }
+  #map-nav .dir { font-weight: 400; color: rgba(255, 255, 255, 0.55); }
+  #map-nav .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color 0.15s; }
+  #map-nav a:hover .name { color: #ffc200; }
+  #map-nav [aria-disabled] .name { color: rgba(255, 255, 255, 0.3); }
   /* hot zones: invisible until hovered, then filled in the zone yellow from the Illustrator file */
   #map-svg .zone { fill: #ffc200; fill-opacity: 0; cursor: pointer; transition: fill-opacity 0.15s; }
   /* the speaker pills are only ~5px thick at this size, so each gets an invisible 8-unit halo that
@@ -93,7 +103,7 @@
 <body>
 <div id="viewer"></div>
 <div id="banner">UNDER CONSTRUCTION</div>
-<div id="map"><div id="map-view"><svg id="map-svg" viewBox="0 0 800 1200"></svg></div></div>
+<div id="map"><div id="map-view"><svg id="map-svg" viewBox="0 0 800 1200"></svg></div><nav id="map-nav" aria-label="Scenes"></nav></div>
 <div id="card"><div class="box">
   <button class="close" aria-label="Close">✕</button>
   <div class="video"></div>
@@ -298,6 +308,20 @@ mapSvg.querySelectorAll('.zone').forEach(g => {
   });
   g.addEventListener('mouseleave', () => markerEl()?.classList.remove('marker--focus'));
 });
+
+// scene breadcrumb: every scene in walking order. Relative URLs so Prev/Next work both on
+// GitHub Pages and from a local server rooted at the 360Tour folder. Keep this list identical
+// in each scene's page; only HERE changes
+const scenes = [
+  { name: 'ROIC INT', url: '../20260921_360_Tour/' },
+  { name: 'Volvo INT', url: '../20260923_360_Tour/' },
+];
+const HERE = 1;
+const navLink = (cls, dir, scene) => scene
+  ? `<a class="${cls}" href="${scene.url}"><span class="dir">${dir}</span><span class="name">${scene.name}</span></a>`
+  : `<span class="${cls}" aria-disabled="true"><span class="dir">${dir}</span><span class="name">—</span></span>`;
+document.getElementById('map-nav').innerHTML =
+  navLink('prev', '‹ Prev', scenes[HERE - 1]) + navLink('next', 'Next ›', scenes[HERE + 1]);
 
 // banner timeline, in frames
 const FPS = 30, DROP = 9, STAGGER = 60, HOLD = 150, FADE = 30;
